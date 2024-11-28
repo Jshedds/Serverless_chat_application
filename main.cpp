@@ -4,8 +4,25 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 using boost::asio::ip::tcp;
+std::mutex io_mutex;
+
+// global variable to store the user's name
+std::string username;
+
+// Function to get the user's name (both client and server)
+void get_user_name() {
+  std::cout << "Enter your name: ";
+  std::getline(std::cin, username);
+}
+
+// function to clear the previous enter message
+void clear_empty_message() {
+  std::cout << "\033[2K\r" << std::flush;
+}
+
 
 // messages
 void handle_receive(tcp::socket& socket) {
@@ -22,17 +39,28 @@ void handle_receive(tcp::socket& socket) {
     }
 
     std::string message(buf.data(), len);
-    std::cout << "Received: " << message <<"\n";
+
+    {
+      std::lock_guard<std::mutex> lock(io_mutex);
+      clear_empty_message();
+      std::cout << "\n" << message << "\n";
+      std::cout << "Enter Message: " << std::flush;
+    }
   }
 }
 
 void handle_send(tcp::socket& socket) {
   while (true) {
     std::string message;
-    std::cout << "Enter Message: ";
+    {
+      std::lock_guard<std::mutex> lock(io_mutex);
+      std::cout << "Enter Message: ";
+    }
     std::getline(std::cin, message);
 
-    boost::asio::write(socket, boost::asio::buffer(message));
+    std::string full_message = username + ": " + message;
+
+    boost::asio::write(socket, boost::asio::buffer(full_message));
   }
 }
 
@@ -85,6 +113,9 @@ int main () {
   std::cout << "3. Exit chat\n";
 
   std::cin >> choice;
+  std::cin.ignore();
+
+  get_user_name();
 
   if (choice == 1) {
     start_server();
