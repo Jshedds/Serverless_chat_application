@@ -11,6 +11,7 @@ std::mutex io_mutex;
 
 // global variable to store the user's name
 std::string username;
+int port_number;
 
 // Function to get the user's name (both client and server)
 void get_user_name() {
@@ -23,6 +24,22 @@ void clear_empty_message() {
   std::cout << "\033[2K\r" << std::flush;
 }
 
+//function to gather port number
+
+void get_port() {
+  while (true) {
+    std::cout << "Please select a port number between 1024 - 65535\n";
+    std::cout << "Port number: ";
+    std::cin >> port_number;
+    std::cin.ignore();
+
+    if(port_number >= 1024 && port_number <= 65535) {
+      break;
+    } else {
+      std::cout << "Invalid port number. Please select again.";
+    }
+  }
+}
 
 // messages
 void handle_receive(tcp::socket& socket) {
@@ -67,7 +84,8 @@ void handle_send(tcp::socket& socket) {
 // server
 void start_server() {
   boost::asio::io_context io_context;
-  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 1234));
+  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
+
   tcp::socket socket(io_context);
 
   std::cout << "Awaiting client connection...\n";
@@ -85,7 +103,9 @@ void start_client() {
 
   boost::asio::io_context io_context;
   tcp::resolver resolver(io_context);
-  tcp::resolver::query query("1234");
+
+  std::string port_str = std::to_string(port_number);
+  tcp::resolver::query query("localhost", port_str);
   tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
 
   tcp::socket socket(io_context);
@@ -106,26 +126,37 @@ void start_client() {
 int main () {
   int choice;
 
-  std::cout << "Serverless Chat Application!\n";
-  std::cout << "Choose from the following options:\n";
-  std::cout << "1. Start Server\n";
-  std::cout << "2. Start Client\n";
-  std::cout << "3. Exit chat\n";
+  try {
+    while(true) {
+      std::cout << "Serverless Chat Application!\n";
+      std::cout << "Choose from the following options:\n";
+      std::cout << "1. Start Server\n";
+      std::cout << "2. Start Client\n";
+      std::cout << "3. Exit chat\n";
 
-  std::cin >> choice;
-  std::cin.ignore();
+      std::cin >> choice;
+      std::cin.ignore();
 
-  get_user_name();
 
-  if (choice == 1) {
-    start_server();
-  } else if (choice == 2) {
-    start_client();
-  } else if (choice == 3) {
-    std::cout << "Exiting peer chat.\n";
-  } else {
-    std::cout << "Invalid choice, please select again.\n";
+      if (choice == 1) {
+        get_port();
+        get_user_name();
+        start_server();
+        break;
+      } else if (choice == 2) {
+        get_port();
+        get_user_name();
+        start_client();
+        break;
+      } else if (choice == 3) {
+        std::cout << "Exiting peer chat.\n";
+        break;
+      } else {
+        std::cout << "Invalid choice, please select again.\n";
+      }
+    }
+  } catch (const std::exception& e) {
+    std::cout << "Exception: " << e.what() << std::endl;
   }
-
   return 0;
 }
