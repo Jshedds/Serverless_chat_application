@@ -25,7 +25,6 @@ void clear_empty_message() {
 }
 
 //function to gather port number
-
 void get_port() {
   while (true) {
     std::cout << "Please select a port number between 1024 - 65535\n";
@@ -42,7 +41,7 @@ void get_port() {
 }
 
 // messages
-void handle_receive(tcp::socket& socket) {
+void receive_message(tcp::socket& socket) {
   while (true) {
     std::vector<char> buf (1024);
     boost::system::error_code error;
@@ -61,17 +60,17 @@ void handle_receive(tcp::socket& socket) {
       std::lock_guard<std::mutex> lock(io_mutex);
       clear_empty_message();
       std::cout << "\n" << message << "\n";
-      std::cout << "Enter Message: " << std::flush;
+      std::cout << username << ": " << std::flush;
     }
   }
 }
 
-void handle_send(tcp::socket& socket) {
+void send_message(tcp::socket& socket) {
   while (true) {
     std::string message;
     {
       std::lock_guard<std::mutex> lock(io_mutex);
-      std::cout << "Enter Message: ";
+      std::cout << username << ": ";
     }
     std::getline(std::cin, message);
 
@@ -84,15 +83,15 @@ void handle_send(tcp::socket& socket) {
 // server
 void start_server() {
   boost::asio::io_context io_context;
-  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
+  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 1024));
 
   tcp::socket socket(io_context);
 
   std::cout << "Awaiting client connection...\n";
   acceptor.accept(socket);
 
-  std::thread receiver(handle_receive, std::ref(socket));
-  std::thread sender(handle_send, std::ref(socket));
+  std::thread receiver(receive_message, std::ref(socket));
+  std::thread sender(send_message, std::ref(socket));
 
   receiver.join();
   sender.join();
@@ -104,8 +103,8 @@ void start_client() {
   boost::asio::io_context io_context;
   tcp::resolver resolver(io_context);
 
-  std::string port_str = std::to_string(port_number);
-  tcp::resolver::query query("localhost", port_str);
+  // std::string port_str = std::to_string(port_number);
+  tcp::resolver::query query("1024");
   tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
 
   tcp::socket socket(io_context);
@@ -113,8 +112,8 @@ void start_client() {
 
   std::cout << "Connected to the server!\n";
 
-  std::thread receiver(handle_receive, std::ref(socket));
-  std::thread sender(handle_send, std::ref(socket));
+  std::thread receiver(receive_message, std::ref(socket));
+  std::thread sender(send_message, std::ref(socket));
 
   receiver.join();
   sender.join();
@@ -139,12 +138,10 @@ int main () {
 
 
       if (choice == 1) {
-        get_port();
         get_user_name();
         start_server();
         break;
       } else if (choice == 2) {
-        get_port();
         get_user_name();
         start_client();
         break;
