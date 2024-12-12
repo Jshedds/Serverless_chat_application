@@ -1,12 +1,14 @@
 // libraries
 #include <iostream>
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 #include <string>
 #include <thread>
 #include <vector>
 #include <mutex>
 
 using boost::asio::ip::tcp;
+namespace ssl = boost::asio::ssl;
 std::mutex io_mutex;
 
 // global variable to store the user's name
@@ -40,12 +42,25 @@ void get_port() {
   }
 }
 
+// // function to configure ssl context for the server
+// void configure_server_ssl_context(ssl::context& ssl_context) {
+//   ssl_context.set_options(
+//       ssl::context::default_workarounds |
+//       ssl::context::no_sslv2 |
+//       ssl::context::single_dh_use
+//   );
+
+
+
+// }
+
+
 // messages
-void receive_message(tcp::socket& socket) {
+void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   while (true) {
     std::vector<char> buf (1024);
     boost::system::error_code error;
-    size_t len = socket.read_some(boost::asio::buffer(buf));
+    size_t len = ssl_socket.read_some(boost::asio::buffer(buf), error);
 
     if (error == boost::asio::error::eof) {
       std::cout << "Connection closed by peer.\n";
@@ -65,7 +80,7 @@ void receive_message(tcp::socket& socket) {
   }
 }
 
-void send_message(tcp::socket& socket) {
+void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   while (true) {
     std::string message;
     {
@@ -76,22 +91,37 @@ void send_message(tcp::socket& socket) {
 
     std::string full_message = username + ": " + message;
 
-    boost::asio::write(socket, boost::asio::buffer(full_message));
+    boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
   }
 }
 
 // server
 void start_server() {
   boost::asio::io_context io_context;
+
+  ssl::context ssl_context(ssl::context::tlsv12);
+
+  ssl_context.use_certificate_file("server.crt", ssl::context::pem);
+  ssl_context.use_private_key_file("server.key", ssl::context::pem);
+
+  ssl_context.load_verify_file("client.crt");
+
+  ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
+
+
   tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 1024));
-
-  tcp::socket socket(io_context);
-
   std::cout << "Awaiting client connection...\n";
-  acceptor.accept(socket);
 
-  std::thread receiver(receive_message, std::ref(socket));
-  std::thread sender(send_message, std::ref(socket));
+  tcp::socket plain_socket(io_context);
+
+  acceptor.accept(plain_socket);
+
+  boost::asio::ssl::stream<tcp::socket> ssl_socket(std::move(plain_socket), ssl_context);
+
+  ssl_socket.handshake(ssl::stream_base::server);
+
+  std::thread receiver(receive_message, std::ref(ssl_socket));
+  std::thread sender(send_message, std::ref(ssl_socket));
 
   receiver.join();
   sender.join();
@@ -101,32 +131,37 @@ void start_server() {
 void start_client() {
 
   boost::asio::io_context io_context;
+
+  ssl::context ssl_context(ssl::context::tlsv12);
+
+  ssl_context.use_certificate_file("client.crt", ssl::context::pem);
+  ssl_context.use_private_key_file("client.key", ssl::context::pem);
+
+  ssl_context.load_verify_file("server.crt");
+
   tcp::resolver resolver(io_context);
+  auto endpoints = resolver.resolve("127.0.0.1", "1024");
 
-  // std::string port_str = std::to_string(port_number);
-  tcp::resolver::query query("1024");
-  tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
+  boost::asio::ssl::stream<tcp::socket> ssl_socket(io_context, ssl_context);
+  boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
 
-  tcp::socket socket(io_context);
-  boost::asio::connect(socket, endpoint_iterator);
+  ssl_socket.handshake(ssl::stream_base::client);
 
   std::cout << "Connected to the server!\n";
 
-  std::thread receiver(receive_message, std::ref(socket));
-  std::thread sender(send_message, std::ref(socket));
+  std::thread receiver(receive_message, std::ref(ssl_socket));
+  std::thread sender(send_message, std::ref(ssl_socket));
 
   receiver.join();
   sender.join();
 }
 
-
-
-
 int main () {
+  std::cout << "Starting main program...\n";
   int choice;
 
   try {
-    while(true) {
+    while (true) {
       std::cout << "Serverless Chat Application!\n";
       std::cout << "Choose from the following options:\n";
       std::cout << "1. Start Server\n";
