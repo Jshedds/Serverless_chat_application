@@ -42,19 +42,6 @@ void get_port() {
   }
 }
 
-// // function to configure ssl context for the server
-// void configure_server_ssl_context(ssl::context& ssl_context) {
-//   ssl_context.set_options(
-//       ssl::context::default_workarounds |
-//       ssl::context::no_sslv2 |
-//       ssl::context::single_dh_use
-//   );
-
-
-
-// }
-
-
 // messages
 void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   while (true) {
@@ -108,8 +95,10 @@ void start_server() {
 
   ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
+  get_port();
 
-  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 1024));
+
+  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
   std::cout << "Awaiting client connection...\n";
 
   tcp::socket plain_socket(io_context);
@@ -139,8 +128,10 @@ void start_client() {
 
   ssl_context.load_verify_file("server.crt");
 
+  get_port();
+
   tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve("127.0.0.1", "1024");
+  auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port_number));
 
   boost::asio::ssl::stream<tcp::socket> ssl_socket(io_context, ssl_context);
   boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
