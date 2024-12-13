@@ -9,7 +9,9 @@
 
 using boost::asio::ip::tcp;
 namespace ssl = boost::asio::ssl;
+
 std::mutex io_mutex;
+std::atomic<bool> program_running(true);
 
 // global variable to store the user's name
 std::string username;
@@ -44,41 +46,65 @@ void get_port() {
 
 // messages
 void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (true) {
-    std::vector<char> buf (1024);
-    boost::system::error_code error;
-    size_t len = ssl_socket.read_some(boost::asio::buffer(buf), error);
+  while (program_running) {
+    try {
+      std::vector<char> buf (1024);
+      boost::system::error_code error;
+      size_t len = ssl_socket.read_some(boost::asio::buffer(buf), error);
 
-    if (error == boost::asio::error::eof) {
-      std::cout << "Connection closed by peer.\n";
-      break;
-    } else if (error) {
-      throw boost::system::system_error(error);
-    }
+      if (error == boost::asio::error::eof) {
+        std::cout << "Connection closed by peer.\n";
+        break;
+      } else if (error) {
+        throw boost::system::system_error(error);
+      }
 
-    std::string message(buf.data(), len);
+      std::string message(buf.data(), len);
 
-    {
-      std::lock_guard<std::mutex> lock(io_mutex);
-      clear_empty_message();
-      std::cout << "\n" << message << "\n";
-      std::cout << username << ": " << std::flush;
+      {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        clear_empty_message();
+        std::cout << "\n" << message << "\n";
+        std::cout << username << ": " << std::flush;
+      }
+
+      if (message == "EXIT") {
+        std::cout << "\nEXIT command received. Closing program.\n";
+        program_running = false;
+        break;
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "Error in receive_message: " << e.what() << "\n";
+      program_running = false;
     }
   }
 }
 
 void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (true) {
-    std::string message;
-    {
-      std::lock_guard<std::mutex> lock(io_mutex);
-      std::cout << username << ": ";
+  while (program_running) {
+    try {
+      std::string message;
+      {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        std::cout << username << ": ";
+      }
+      std::getline(std::cin, message);
+
+      if (message == "EXIT") {
+        std::cout << "\nEXIT message entered. Program ending...\n";
+        program_running = false;
+
+        boost::asio::write(ssl_socket, boost::asio::buffer(message));
+        break;
+      }
+
+      std::string full_message = username + ": " + message;
+
+      boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
+    } catch (const std::exception& e) {
+      std::cerr << "Error in send_message: " << e.what() << "\n";
+      program_running = false;
     }
-    std::getline(std::cin, message);
-
-    std::string full_message = username + ": " + message;
-
-    boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
   }
 }
 
@@ -94,9 +120,6 @@ void start_server() {
   ssl_context.load_verify_file("client.crt");
 
   ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
-
-  get_port();
-
 
   tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
   std::cout << "Awaiting client connection...\n";
@@ -128,8 +151,6 @@ void start_client() {
 
   ssl_context.load_verify_file("server.crt");
 
-  get_port();
-
   tcp::resolver resolver(io_context);
   auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port_number));
 
@@ -148,7 +169,6 @@ void start_client() {
 }
 
 int main () {
-  std::cout << "Starting main program...\n";
   int choice;
 
   try {
@@ -158,6 +178,7 @@ int main () {
       std::cout << "1. Start Server\n";
       std::cout << "2. Start Client\n";
       std::cout << "3. Exit chat\n";
+      std::cout << "To end chat at any point please type 'EXIT'\n";
 
       std::cin >> choice;
       std::cin.ignore();
@@ -165,10 +186,12 @@ int main () {
 
       if (choice == 1) {
         get_user_name();
+        get_port();
         start_server();
         break;
       } else if (choice == 2) {
         get_user_name();
+        get_port();
         start_client();
         break;
       } else if (choice == 3) {
