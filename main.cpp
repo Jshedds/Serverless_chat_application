@@ -44,7 +44,36 @@ void get_port() {
   }
 }
 
-// Fucntion to receive messages
+// Function to send messages
+void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
+  while (true) {
+    try {
+      std::string message;
+
+      // Thread safe user input
+      {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        std::cout << username << ": ";
+      }
+      std::getline(std::cin, message);
+
+      // Handle the EXIT command
+      if (message == "EXIT") {
+        std::cout << "\nEXIT message entered. Program ending...\n";
+        boost::asio::write(ssl_socket, boost::asio::buffer(message));
+        exit(0);
+      }
+
+      // Send the full message with username prepended.
+      std::string full_message = username + ": " + message;
+      boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
+    } catch (const std::exception& e) {
+      std::cerr << "Error in send_message: " << e.what() << "\n";
+    }
+  }
+}
+
+// Function to receive messages
 void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   while (true) {
     try {
@@ -86,37 +115,8 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   }
 }
 
-// Function to send messages
-void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (true) {
-    try {
-      std::string message;
-
-      // Thread safe user input
-      {
-        std::lock_guard<std::mutex> lock(io_mutex);
-        std::cout << username << ": ";
-      }
-      std::getline(std::cin, message);
-
-      // Handle the EXIT command
-      if (message == "EXIT") {
-        std::cout << "\nEXIT message entered. Program ending...\n";
-        boost::asio::write(ssl_socket, boost::asio::buffer(message));
-        exit(0);
-      }
-
-      // Send the full message with username prepended.
-      std::string full_message = username + ": " + message;
-      boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
-    } catch (const std::exception& e) {
-      std::cerr << "Error in send_message: " << e.what() << "\n";
-    }
-  }
-}
-
 // Function to start server
-void start_server() {
+void start_server(const std::string& user_name, int port) {
   // I/O context for asynchronous operations
   boost::asio::io_context io_context;
 
@@ -132,7 +132,7 @@ void start_server() {
   ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
   // Set up the TCP acceptor to listen for connections
-  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
+  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
   std::cout << "Awaiting client connection...\n";
 
   // Unencrypted socket
@@ -159,7 +159,7 @@ void start_server() {
 }
 
 // Function to start the client
-void start_client() {
+void start_client(const std::string& user_name, int port) {
   // I/O context for asynchronous operations
   boost::asio::io_context io_context;
 
@@ -175,7 +175,7 @@ void start_client() {
 
   // Resolve server's address and port
   tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port_number));
+  auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
   // Connect to ther server (peer) and perform SSL handshake
   boost::asio::ssl::stream<tcp::socket> ssl_socket(io_context, ssl_context);
@@ -213,12 +213,12 @@ int main () {
       if (choice == 1) {
         get_user_name();
         get_port();
-        start_server();
+        start_server(username, port_number);
         break;
       } else if (choice == 2) {
         get_user_name();
         get_port();
-        start_client();
+        start_client(username, port_number);
         break;
       } else if (choice == 3) {
         std::cout << "Exiting peer chat.\n";
