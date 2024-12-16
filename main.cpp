@@ -45,7 +45,7 @@ void get_port() {
 }
 
 // Function to send messages
-void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
+void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const std::string& user_name) {
   while (true) {
     try {
       std::string message;
@@ -53,7 +53,7 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
       // Thread safe user input
       {
         std::lock_guard<std::mutex> lock(io_mutex);
-        std::cout << username << ": ";
+        std::cout << user_name << ": ";
       }
       std::getline(std::cin, message);
 
@@ -65,7 +65,7 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
       }
 
       // Send the full message with username prepended.
-      std::string full_message = username + ": " + message;
+      std::string full_message = user_name + ": " + message;
       boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
     } catch (const std::exception& e) {
       std::cerr << "Error in send_message: " << e.what() << "\n";
@@ -74,7 +74,7 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
 }
 
 // Function to receive messages
-void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
+void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const std::string& user_name) {
   while (true) {
     try {
       // Buffer to store incoming messages
@@ -101,7 +101,7 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
         std::lock_guard<std::mutex> lock(io_mutex);
         clear_empty_message();
         std::cout << "\n" << message << "\n";
-        std::cout << username << ": " << std::flush;
+        std::cout << user_name << ": " << std::flush;
       }
 
       // Handle the EXIT command
@@ -150,8 +150,8 @@ void start_server(const std::string& user_name, int port) {
   std::cout << "Connected to the peer!\n";
 
   // Start sender and receiver threads
-  std::thread receiver(receive_message, std::ref(ssl_socket));
-  std::thread sender(send_message, std::ref(ssl_socket));
+  std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
+  std::thread sender(send_message, std::ref(ssl_socket), user_name);
 
   // Wait for threads to finish
   receiver.join();
@@ -185,8 +185,8 @@ void start_client(const std::string& user_name, int port) {
   std::cout << "Connected to the peer!\n";
 
   // Start sender and receiver threads
-  std::thread receiver(receive_message, std::ref(ssl_socket));
-  std::thread sender(send_message, std::ref(ssl_socket));
+  std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
+  std::thread sender(send_message, std::ref(ssl_socket), user_name);
 
   // Wait for threads to finish
   receiver.join();
