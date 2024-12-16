@@ -11,7 +11,6 @@ using boost::asio::ip::tcp;
 namespace ssl = boost::asio::ssl;
 
 std::mutex io_mutex;
-std::atomic<bool> program_running(true);
 
 // global variable to store the user's name
 std::string username;
@@ -46,7 +45,7 @@ void get_port() {
 
 // messages
 void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (program_running) {
+  while (true) {
     try {
       std::vector<char> buf (1024);
       boost::system::error_code error;
@@ -70,20 +69,20 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
 
       if (message == "EXIT") {
         std::cout << "\nEXIT command received. Closing program.\n";
-        program_running = false;
-        break;
+        exit(0);
       }
     } catch (const std::exception& e) {
       std::cerr << "Error in receive_message: " << e.what() << "\n";
-      program_running = false;
     }
   }
 }
 
 void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (program_running) {
+  while (true) {
     try {
       std::string message;
+
+
       {
         std::lock_guard<std::mutex> lock(io_mutex);
         std::cout << username << ": ";
@@ -92,10 +91,8 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
 
       if (message == "EXIT") {
         std::cout << "\nEXIT message entered. Program ending...\n";
-        program_running = false;
-
         boost::asio::write(ssl_socket, boost::asio::buffer(message));
-        break;
+        exit(0);
       }
 
       std::string full_message = username + ": " + message;
@@ -103,7 +100,6 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
       boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
     } catch (const std::exception& e) {
       std::cerr << "Error in send_message: " << e.what() << "\n";
-      program_running = false;
     }
   }
 }
@@ -131,6 +127,8 @@ void start_server() {
   boost::asio::ssl::stream<tcp::socket> ssl_socket(std::move(plain_socket), ssl_context);
 
   ssl_socket.handshake(ssl::stream_base::server);
+  std::cout << "SSL handshake complete. Encrypted chat active.\n";
+  std::cout << "Connected to the peer!\n";
 
   std::thread receiver(receive_message, std::ref(ssl_socket));
   std::thread sender(send_message, std::ref(ssl_socket));
@@ -158,8 +156,8 @@ void start_client() {
   boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
 
   ssl_socket.handshake(ssl::stream_base::client);
-
-  std::cout << "Connected to the server!\n";
+  std::cout << "SSL handshake complete. Encrypted chat active.\n";
+  std::cout << "Connected to the peer!\n";
 
   std::thread receiver(receive_message, std::ref(ssl_socket));
   std::thread sender(send_message, std::ref(ssl_socket));
