@@ -100,7 +100,7 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const st
       {
         std::lock_guard<std::mutex> lock(io_mutex);
         clear_empty_message();
-        std::cout << "\n" << message << "\n";
+        std::cout << message << "\n";
         std::cout << user_name << ": " << std::flush;
       }
 
@@ -172,6 +172,7 @@ void start_client(const std::string& user_name, int port) {
 
   // Load server's certificate to verify peer
   ssl_context.load_verify_file("server.crt");
+  ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
   // Resolve server's address and port
   tcp::resolver resolver(io_context);
@@ -199,7 +200,7 @@ int main () {
   try {
     while (true) {
       // main Menu for the application
-      std::cout << "Serverless Chat Application!\n";
+      std::cout << "Welcome to Stealth Chat! \nWhere you can have the confidence your conversations are safe and secure.";
       std::cout << "Choose from the following options:\n";
       std::cout << "1. Start Peer 1 (Server)\n";
       std::cout << "2. Start Peer 2 (Client)\n";
@@ -219,9 +220,6 @@ int main () {
         get_user_name();
         get_port();
         start_client(username, port_number);
-        break;
-      } else if (choice == 3) {
-        std::cout << "Exiting peer chat.\n";
         break;
       } else {
         std::cout << "Invalid choice, please select again.\n";
