@@ -147,7 +147,7 @@ void start_server(const std::string& user_name, int port) {
   // Perform SSL handshake
   ssl_socket.handshake(ssl::stream_base::server);
   std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the peer!\n";
+  std::cout << "Connected to the Peer 2!\n";
 
   // Start sender and receiver threads
   std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
@@ -183,7 +183,7 @@ void start_client(const std::string& user_name, int port) {
   boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
   ssl_socket.handshake(ssl::stream_base::client);
   std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the peer!\n";
+  std::cout << "Connected to the Peer 1!\n";
 
   // Start sender and receiver threads
   std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
@@ -200,12 +200,12 @@ int main () {
   try {
     while (true) {
       // main Menu for the application
-      std::cout << "Welcome to Stealth Chat! \nWhere you can have the confidence your conversations are safe and secure.";
-      std::cout << "Choose from the following options:\n";
+      std::cout << "Welcome to Stealth Chat! \nWhere you can have the confidence your conversations are safe and secure.\n";
+      std::cout << "\nChoose from the following options:\n";
       std::cout << "1. Start Peer 1 (Server)\n";
       std::cout << "2. Start Peer 2 (Client)\n";
       std::cout << "3. Exit chat\n";
-      std::cout << "Type 'EXIT' to end connection.\n";
+      std::cout << "Type 'EXIT' to end encrypted chat at any point.\n";
 
       std::cin >> choice;
       std::cin.ignore();
@@ -220,6 +220,8 @@ int main () {
         get_user_name();
         get_port();
         start_client(username, port_number);
+        break;
+      } else if (choice == 3) {
         break;
       } else {
         std::cout << "Invalid choice, please select again.\n";
