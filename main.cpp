@@ -44,8 +44,37 @@ void get_port() {
   }
 }
 
-// Fucntion to receive messages
-void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
+// Function to send messages
+void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const std::string& user_name) {
+  while (true) {
+    try {
+      std::string message;
+
+      // Thread safe user input
+      {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        std::cout << user_name << ": ";
+      }
+      std::getline(std::cin, message);
+
+      // Handle the EXIT command
+      if (message == "EXIT") {
+        std::cout << "\nEXIT message entered. Program ending...\n";
+        boost::asio::write(ssl_socket, boost::asio::buffer(message));
+        exit(0);
+      }
+
+      // Send the full message with username prepended.
+      std::string full_message = user_name + ": " + message;
+      boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
+    } catch (const std::exception& e) {
+      std::cerr << "Error in send_message: " << e.what() << "\n";
+    }
+  }
+}
+
+// Function to receive messages
+void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const std::string& user_name) {
   while (true) {
     try {
       // Buffer to store incoming messages
@@ -71,8 +100,8 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
       {
         std::lock_guard<std::mutex> lock(io_mutex);
         clear_empty_message();
-        std::cout << "\n" << message << "\n";
-        std::cout << username << ": " << std::flush;
+        std::cout << message << "\n";
+        std::cout << user_name << ": " << std::flush;
       }
 
       // Handle the EXIT command
@@ -86,37 +115,8 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
   }
 }
 
-// Function to send messages
-void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket) {
-  while (true) {
-    try {
-      std::string message;
-
-      // Thread safe user input
-      {
-        std::lock_guard<std::mutex> lock(io_mutex);
-        std::cout << username << ": ";
-      }
-      std::getline(std::cin, message);
-
-      // Handle the EXIT command
-      if (message == "EXIT") {
-        std::cout << "\nEXIT message entered. Program ending...\n";
-        boost::asio::write(ssl_socket, boost::asio::buffer(message));
-        exit(0);
-      }
-
-      // Send the full message with username prepended.
-      std::string full_message = username + ": " + message;
-      boost::asio::write(ssl_socket, boost::asio::buffer(full_message));
-    } catch (const std::exception& e) {
-      std::cerr << "Error in send_message: " << e.what() << "\n";
-    }
-  }
-}
-
 // Function to start server
-void start_server() {
+void start_server(const std::string& user_name, int port) {
   // I/O context for asynchronous operations
   boost::asio::io_context io_context;
 
@@ -132,7 +132,7 @@ void start_server() {
   ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
   // Set up the TCP acceptor to listen for connections
-  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_number));
+  tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
   std::cout << "Awaiting client connection...\n";
 
   // Unencrypted socket
@@ -147,11 +147,11 @@ void start_server() {
   // Perform SSL handshake
   ssl_socket.handshake(ssl::stream_base::server);
   std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the peer!\n";
+  std::cout << "Connected to the Peer 2!\n";
 
   // Start sender and receiver threads
-  std::thread receiver(receive_message, std::ref(ssl_socket));
-  std::thread sender(send_message, std::ref(ssl_socket));
+  std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
+  std::thread sender(send_message, std::ref(ssl_socket), user_name);
 
   // Wait for threads to finish
   receiver.join();
@@ -159,7 +159,7 @@ void start_server() {
 }
 
 // Function to start the client
-void start_client() {
+void start_client(const std::string& user_name, int port) {
   // I/O context for asynchronous operations
   boost::asio::io_context io_context;
 
@@ -172,21 +172,22 @@ void start_client() {
 
   // Load server's certificate to verify peer
   ssl_context.load_verify_file("server.crt");
+  ssl_context.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
   // Resolve server's address and port
   tcp::resolver resolver(io_context);
-  auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port_number));
+  auto endpoints = resolver.resolve("127.0.0.1", std::to_string(port));
 
   // Connect to ther server (peer) and perform SSL handshake
   boost::asio::ssl::stream<tcp::socket> ssl_socket(io_context, ssl_context);
   boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
   ssl_socket.handshake(ssl::stream_base::client);
   std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the peer!\n";
+  std::cout << "Connected to the Peer 1!\n";
 
   // Start sender and receiver threads
-  std::thread receiver(receive_message, std::ref(ssl_socket));
-  std::thread sender(send_message, std::ref(ssl_socket));
+  std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
+  std::thread sender(send_message, std::ref(ssl_socket), user_name);
 
   // Wait for threads to finish
   receiver.join();
@@ -199,12 +200,12 @@ int main () {
   try {
     while (true) {
       // main Menu for the application
-      std::cout << "Serverless Chat Application!\n";
-      std::cout << "Choose from the following options:\n";
+      std::cout << "Welcome to Stealth Chat! \nWhere you can have the confidence your conversations are safe and secure.\n";
+      std::cout << "\nChoose from the following options:\n";
       std::cout << "1. Start Peer 1 (Server)\n";
       std::cout << "2. Start Peer 2 (Client)\n";
       std::cout << "3. Exit chat\n";
-      std::cout << "Type 'EXIT' to end connection.\n";
+      std::cout << "Type 'EXIT' to end encrypted chat at any point.\n";
 
       std::cin >> choice;
       std::cin.ignore();
@@ -213,15 +214,14 @@ int main () {
       if (choice == 1) {
         get_user_name();
         get_port();
-        start_server();
+        start_server(username, port_number);
         break;
       } else if (choice == 2) {
         get_user_name();
         get_port();
-        start_client();
+        start_client(username, port_number);
         break;
       } else if (choice == 3) {
-        std::cout << "Exiting peer chat.\n";
         break;
       } else {
         std::cout << "Invalid choice, please select again.\n";
