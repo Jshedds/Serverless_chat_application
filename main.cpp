@@ -7,10 +7,15 @@
 #include <vector>
 #include <mutex>
 
+
 using boost::asio::ip::tcp;
 namespace ssl = boost::asio::ssl;
 
 std::mutex io_mutex;
+
+// Colour options
+#define RESET "\033[0m"
+#define GREEN "\033[32m"
 
 // Global Variables
 std::string username;
@@ -18,7 +23,7 @@ int port_number;
 
 // Function to get the user's name (both client and server)
 void get_user_name() {
-  std::cout << "Enter your name: ";
+  std::cout << "\nEnter your name: ";
   std::getline(std::cin, username);
 }
 
@@ -30,7 +35,7 @@ void clear_empty_message() {
 // Function to gather port number
 void get_port() {
   while (true) {
-    std::cout << "Please select a port number between 1024 - 65535\n";
+    std::cout << "\nPlease select a port number between 1024 - 65535\n";
     std::cout << "Port number: ";
     std::cin >> port_number;
     std::cin.ignore();
@@ -53,7 +58,7 @@ void send_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const std::
       // Thread safe user input
       {
         std::lock_guard<std::mutex> lock(io_mutex);
-        std::cout << user_name << ": ";
+        std::cout <<  user_name << ": ";
       }
       std::getline(std::cin, message);
 
@@ -100,7 +105,7 @@ void receive_message(boost::asio::ssl::stream<tcp::socket>& ssl_socket, const st
       {
         std::lock_guard<std::mutex> lock(io_mutex);
         clear_empty_message();
-        std::cout << message << "\n";
+        std::cout << GREEN << message << RESET << "\n";
         std::cout << user_name << ": " << std::flush;
       }
 
@@ -141,13 +146,13 @@ void start_server(const std::string& user_name, int port) {
   // Accept a connection
   acceptor.accept(plain_socket);
 
-  // Upgarde to an TLS socket
+  // Upgrade to an TLS socket
   boost::asio::ssl::stream<tcp::socket> ssl_socket(std::move(plain_socket), ssl_context);
 
   // Perform SSL handshake
   ssl_socket.handshake(ssl::stream_base::server);
-  std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the Peer 2!\n";
+  std::cout << "Secure Sockets Layer (SSL) handshake complete. Encrypted chat active.\n";
+  std::cout << "Connected to Peer 2!\n\n";
 
   // Start sender and receiver threads
   std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
@@ -182,8 +187,8 @@ void start_client(const std::string& user_name, int port) {
   boost::asio::ssl::stream<tcp::socket> ssl_socket(io_context, ssl_context);
   boost::asio::connect(ssl_socket.lowest_layer(), endpoints);
   ssl_socket.handshake(ssl::stream_base::client);
-  std::cout << "SSL handshake complete. Encrypted chat active.\n";
-  std::cout << "Connected to the Peer 1!\n";
+  std::cout << "Secure Sockets Layer (SSL) handshake complete. Encrypted chat active.\n";
+  std::cout << "Connected to Peer 1!\n\n";
 
   // Start sender and receiver threads
   std::thread receiver(receive_message, std::ref(ssl_socket), user_name);
@@ -202,10 +207,10 @@ int main () {
       // main Menu for the application
       std::cout << "Welcome to Stealth Chat! \nWhere you can have the confidence your conversations are safe and secure.\n";
       std::cout << "\nChoose from the following options:\n";
-      std::cout << "1. Start Peer 1 (Server)\n";
-      std::cout << "2. Start Peer 2 (Client)\n";
+      std::cout << "1. Start Peer 1 (First on)\n";
+      std::cout << "2. Start Peer 2 (Second on)\n";
       std::cout << "3. Exit chat\n";
-      std::cout << "Type 'EXIT' to end encrypted chat at any point.\n";
+      std::cout << "Type 'EXIT' to end encrypted chat at any point once in chatroom.\n";
 
       std::cin >> choice;
       std::cin.ignore();
